@@ -1,15 +1,15 @@
-const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const bcrypt = require('bcrypt');
-const cors = require('cors');
+const express = require("express");
+const sqlite3 = require("sqlite3").verbose();
+const bcrypt = require("bcrypt");
+const cors = require("cors");
 const app = express();
-const db = new sqlite3.Database('./database.sqlite');
-const { swaggerUi, swaggerSpec } = require('./swagger');
+const db = new sqlite3.Database("./database.sqlite");
+const { swaggerUi, swaggerSpec } = require("./swagger");
 
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 /**
  * @swagger
@@ -35,37 +35,46 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
  *       500:
  *         description: Server error
  */
-app.post('/login', (req, res) => {
+app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    return res.status(400).json({ message: 'Username and password are required.' });
+    return res
+      .status(400)
+      .json({ message: "Username and password are required." });
   }
 
-  const query = 'SELECT * FROM users WHERE username = ?';
+  const query = "SELECT * FROM users WHERE username = ?";
 
   db.get(query, [username], (err, row) => {
     if (err) {
-      return res.status(500).json({ message: 'Error logging in.', error: err.message });
+      return res
+        .status(500)
+        .json({ message: "Error logging in.", error: err.message });
     }
 
     if (row) {
       bcrypt.compare(password, row.password, (err, result) => {
         if (err) {
-          return res.status(500).json({ message: 'Error comparing passwords.', error: err.message });
+          return res.status(500).json({
+            message: "Error comparing passwords.",
+            error: err.message,
+          });
         }
 
         if (result) {
           return res.status(200).json({
-            message: 'Login successful!',
+            message: "Login successful!",
             userId: row.id,
           });
         } else {
-          return res.status(400).json({ message: 'Invalid username or password.' });
+          return res
+            .status(400)
+            .json({ message: "Invalid username or password." });
         }
       });
     } else {
-      return res.status(400).json({ message: 'Invalid username or password.' });
+      return res.status(400).json({ message: "Invalid username or password." });
     }
   });
 });
@@ -89,28 +98,41 @@ app.post('/login', (req, res) => {
  *       500:
  *         description: Server error
  */
-app.get('/settings', (req, res) => {
+app.get("/settings", (req, res) => {
   const userId = parseInt(req.query.userId, 10);
 
   if (isNaN(userId)) {
-    return res.status(400).json({ message: 'Invalid user ID.' });
+    return res.status(400).json({ message: "Invalid user ID." });
   }
 
-  const query = 'SELECT key, value FROM user_settings WHERE user_id = ?';
+  const query = "SELECT key, value FROM user_settings WHERE user_id = ?";
 
   db.all(query, [userId], (err, rows) => {
     if (err) {
-      return res.status(500).json({ message: 'Error fetching settings.', error: err.message });
+      return res
+        .status(500)
+        .json({ message: "Error fetching settings.", error: err.message });
     }
 
     if (rows.length > 0) {
       const settings = {};
-      rows.forEach(row => {
-        settings[row.key] = parseFloat(row.value) || row.value;
+      rows.forEach((row) => {
+        settings[row.key] = parseFloat(row.value) ?? row.value;
       });
+      console.log(settings);
       return res.status(200).json({ settings });
     } else {
-      return res.status(404).json({ message: 'No settings found for this user.' });
+      return res.json({
+        settings: {
+          rotation: 0,
+          zoom: 5,
+          panX: 0,
+          panY: 0,
+          controlY: 0,
+          controlX: 0,
+          controlZ: 0,
+        },
+      });
     }
   });
 });
@@ -148,44 +170,53 @@ app.get('/settings', (req, res) => {
  *       500:
  *         description: Server error
  */
-app.put('/settings', (req, res) => {
+app.put("/settings", (req, res) => {
   const { userId, settings } = req.body;
 
   if (!userId || !settings) {
-    return res.status(400).json({ error: 'User ID and settings are required.' });
+    return res
+      .status(400)
+      .json({ error: "User ID and settings are required." });
   }
 
-  const { rotation, zoom, panX, panY } = settings;
-
-  if (
-    isNaN(rotation) ||
-    isNaN(zoom) ||
-    isNaN(panX) ||
-    isNaN(panY)
-  ) {
-    return res.status(400).json({ error: 'All settings (rotation, zoom, panX, panY) must be numbers.' });
-  }
+  console.log("Settings:", settings);
 
   const query = `
     INSERT INTO user_settings (user_id, key, value)
-    VALUES (?, 'rotation', ?), (?, 'zoom', ?), (?, 'panX', ?), (?, 'panY', ?)
-    ON CONFLICT(user_id, key)
-    DO UPDATE SET value = excluded.value;
+    VALUES (?, 'rotation', ?), (?, 'zoom', ?), (?, 'panX', ?), (?, 'panY', ?), (?, 'controlY', ?), (?, 'controlX', ?), (?, 'controlZ', ?)
   `;
 
   db.run(
     query,
-    [userId, rotation, userId, zoom, userId, panX, userId, panY],
+    [
+      userId,
+      settings.rotation,
+      userId,
+      settings.zoom,
+      userId,
+      settings.panX,
+      userId,
+      settings.panY,
+      userId,
+      settings.controlY,
+      userId,
+      settings.controlX,
+      userId,
+      settings.controlZ,
+    ],
     function (err) {
       if (err) {
-        return res.status(500).json({ error: 'Failed to update settings.', details: err.message });
+        console.error("Err:", err);
+        return res
+          .status(500)
+          .json({ error: "Failed to update settings.", details: err.message });
       }
-      res.status(200).json({ message: 'Settings updated successfully.' });
+      res.status(200).json({ message: "Settings updated successfully." });
     }
   );
 });
 
 // Start the server
 app.listen(3000, () => {
-  console.log('Server running on http://localhost:3000');
+  console.log("Server running on http://localhost:3000");
 });
